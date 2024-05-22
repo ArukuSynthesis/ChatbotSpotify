@@ -1,0 +1,8 @@
+Flask
+Flask-RESTful
+requests
+spotipy
+scikit-learn
+pandas
+numpy
+gunicorn
