@@ -1,8 +1,10 @@
-Flask
-Flask-RESTful
-requests
-spotipy
-scikit-learn
 pandas
-numpy
-gunicorn
+joblib
+requests
+flask
+flask-restful
+flask-swagger-ui
+flasgger
+python-telegram-bot
+scikit-learn
+gdown
