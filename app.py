@@ -10,9 +10,12 @@ from flasgger import Swagger, swag_from
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext, Application, ApplicationBuilder
 from sklearn.metrics.pairwise import cosine_similarity
+import streamlit as st
+import asyncio
+import threading
 
-# Configuración
-from config import TELEGRAM_TOKEN
+# Configuración del token de Telegram
+TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 
 # Crear la carpeta data si no existe
 if not os.path.exists('data'):
@@ -21,7 +24,8 @@ if not os.path.exists('data'):
 # Descargar el archivo CSV
 url = 'https://drive.google.com/u/1/uc?id=18jTl6d0-7plusVePqU3y7CoFmvyZfG2S&export=download'
 output = 'data/tracks_features.csv'
-gdown.download(url, output, quiet=False)
+if not os.path.exists(output):
+    gdown.download(url, output, quiet=False)
 
 app = Flask(__name__)
 api = Api(app)
@@ -81,22 +85,18 @@ class RecommendTrack(Resource):
         if not track_name:
             return {'error': 'track_name is required'}, 400
 
-        # Filtrar la canción de entrada
-        filtered_data = data[data['track_name'].str.contains(track_name, case=False, na=False)]
+        filtered_data = data[data['track_name'].str.contains(track_name, case=False, na=False)].head(1)
         if filtered_data.empty:
             return {'error': 'No tracks found'}, 404
-        
-        # Usar la primera canción que coincide para encontrar similitudes
-        target_track = filtered_data.iloc[0]
-        target_features = target_track[numeric_columns].values.reshape(1, -1)
-        
-        # Calcular similitudes
+
+        track_features = filtered_data[numeric_columns].values
         all_features = data[numeric_columns].values
-        similarities = cosine_similarity(target_features, all_features).flatten()
-        
-        # Obtener las 5 canciones más similares
-        similar_indices = similarities.argsort()[-6:-1][::-1]  # Excluye la misma canción
-        recommendations = data.iloc[similar_indices]
+
+        similarities = cosine_similarity(track_features, all_features)
+        data['similarity'] = similarities[0]
+
+        recommendations = data.sort_values(by='similarity', ascending=False).head(6)
+        recommendations = recommendations.iloc[1:]  # Excluir la canción de entrada
 
         response = recommendations[non_numeric_columns].to_dict(orient='records')
         return jsonify(response)
@@ -143,7 +143,7 @@ class SearchTrack(Resource):
         if filtered_data.empty:
             return {'error': 'No tracks found'}, 404
 
-        response = filtered_data.to_dict(orient='records')
+        response = filtered_data[non_numeric_columns].to_dict(orient='records')
         return jsonify(response)
 
 api.add_resource(RecommendTrack, '/recommend_track')
@@ -183,17 +183,15 @@ async def recommend(update: Update, context: CallbackContext):
             message += f"Artista: {track['artist']}\nÁlbum: {track['album']}\nCanción: {track['track_name']}\n\n"
         await update.message.reply_text(message)
 
-app_telegram = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+def run_telegram_bot():
+    app_telegram = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-app_telegram.add_handler(CommandHandler("start", start))
-app_telegram.add_handler(CommandHandler("search", search))
-app_telegram.add_handler(CommandHandler("recommend", recommend))
+    app_telegram.add_handler(CommandHandler("start", start))
+    app_telegram.add_handler(CommandHandler("search", search))
+    app_telegram.add_handler(CommandHandler("recommend", recommend))
 
-# Swagger UI configuration
-SWAGGER_URL = '/swagger'
-API_URL = '/static/swagger.json'
-swaggerui_blueprint = get_swaggerui_blueprint(SWAGGER_URL, API_URL, config={'app_name': "Spotify Recommender API"})
-app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    app_telegram.run_polling()
 
 if __name__ == '__main__':
     import threading
@@ -204,4 +202,5 @@ if __name__ == '__main__':
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
 
-    app_telegram.run_polling()
+    telegram_thread = threading.Thread(target=run_telegram_bot)
+    telegram_thread.start()
