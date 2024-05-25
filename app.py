@@ -1,9 +1,14 @@
 import os
 import requests
 import base64
+import streamlit as st
 from dotenv import load_dotenv
 import spacy
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import subprocess
+
+# Modelo de SpaCy
+subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
 
 # Cargar el modelo de spaCy
 nlp = spacy.load("en_core_web_sm")
@@ -11,8 +16,9 @@ nlp = spacy.load("en_core_web_sm")
 
 load_dotenv()
 
-client_id = os.getenv('SPOTIFY_CLIENT_ID')
-client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+client_id = st.secrets['SPOTIFY_CLIENT_ID']
+client_secret = st.secrets['SPOTIFY_CLIENT_SECRET']
+HT_TOKEN = st.secrets['HT_TOKEN']
 
 # Función para obtener el token de Spotify
 def get_spotify_token(client_id, client_secret):
