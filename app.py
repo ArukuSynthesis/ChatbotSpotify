@@ -4,18 +4,17 @@ import base64
 import spacy
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import streamlit as st
-import subprocess
 
-# Función para descargar el modelo de spaCy si no está disponible
-def download_spacy_model():
-    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
-
-# Intentar cargar el modelo spaCy, si falla descargarlo
-try:
-    nlp = spacy.load('en_core_web_sm')
-except OSError:
-    download_spacy_model()
-    nlp = spacy.load('en_core_web_sm')
+# Descargar y cargar el modelo de spaCy
+@st.cache_resource
+def load_spacy_model():
+    try:
+        nlp = spacy.load('en_core_web_sm')
+    except OSError:
+        from spacy.cli import download
+        download("en_core_web_sm")
+        nlp = spacy.load('en_core_web_sm')
+    return nlp
 
 # Obtener secretos de Streamlit
 client_id = st.secrets['SPOTIFY_CLIENT_ID']
@@ -36,14 +35,13 @@ model_name = "microsoft/DialoGPT-medium"
 tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=HF_TOKEN)
 model = AutoModelForCausalLM.from_pretrained(model_name, use_auth_token=HF_TOKEN)
 
+# Cargar el modelo de spaCy
+nlp = load_spacy_model()
+
 st.title("Spotify Chatbot")
 st.write("Este es un chatbot que utiliza la API de Spotify.")
 
 query = st.text_input("Introduce tu consulta:")
-
-if query:
-    doc = nlp(query)
-    st.write(f"Tokens: {[token.text for token in doc]}")
 
 def generate_response(input_text):
     input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors="pt")
