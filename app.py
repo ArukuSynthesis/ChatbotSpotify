@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import base64
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
 
 # Función para obtener el token de Spotify
 def get_spotify_token(client_id, client_secret):
@@ -15,23 +16,6 @@ def get_spotify_token(client_id, client_secret):
     }
     response = requests.post(auth_url, headers=headers, data=auth_data)
     return response.json().get('access_token')
-
-# Credenciales de Spotify
-client_id = '6bc4999a255e46dcaa86aaf47007ea82'
-client_secret = '0a786758931048aaafad513ba65c2c23'
-spotify_token = get_spotify_token(client_id, client_secret)
-
-# Cargar el modelo y el tokenizer
-model_name = "microsoft/DialoGPT-medium"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name)
-
-# Función para generar respuestas
-def generate_response(input_text):
-    input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors="pt")
-    response_ids = model.generate(input_ids, max_length=1000, pad_token_id=tokenizer.eos_token_id)
-    response_text = tokenizer.decode(response_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
-    return response_text
 
 # Función para obtener información de una canción en Spotify
 def get_track_info(track_name, spotify_token):
@@ -52,6 +36,23 @@ def get_track_info(track_name, spotify_token):
     else:
         return "No se encontró la canción."
 
+# Función para generar respuestas
+def generate_response(input_text):
+    # Cargar el modelo y el tokenizer
+    model_name = "microsoft/DialoGPT-medium"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+
+    input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors="pt")
+    response_ids = model.generate(input_ids, max_length=1000, pad_token_id=tokenizer.eos_token_id)
+    response_text = tokenizer.decode(response_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
+    
+    # Liberar memoria
+    del model
+    torch.cuda.empty_cache()
+    
+    return response_text
+
 # Función para responder al usuario
 def chatbot_response(user_input, spotify_token):
     if "buscar canción" in user_input:
@@ -62,6 +63,11 @@ def chatbot_response(user_input, spotify_token):
 
 # Interfaz de usuario con Streamlit
 st.title("Chatbot con Spotify y DialoGPT")
+
+client_id = st.secrets['SPOTIFY_CLIENT_ID']
+client_secret = st.secrets['SPOTIFY_CLIENT_SECRET']
+HF_TOKEN = st.secrets['HF_TOKEN']
+spotify_token = get_spotify_token(client_id, client_secret)
 
 user_input = st.text_input("Escribe tu mensaje iniciando con 'buscar canción':")
 
