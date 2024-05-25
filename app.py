@@ -1,9 +1,25 @@
 import os
 import requests
 import base64
+import spacy
 import spacy_streamlit
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import streamlit as st
+import subprocess
+
+# Función para descargar el modelo de spaCy si no está disponible
+def download_spacy_model(model_name):
+    subprocess.run(["python", "-m", "spacy", "download", model_name])
+
+# Modelo de spaCy
+spacy_model = 'en_core_web_sm'
+
+# Intentar cargar el modelo spaCy, si falla descargarlo
+try:
+    nlp = spacy.load(spacy_model)
+except OSError:
+    download_spacy_model(spacy_model)
+    nlp = spacy.load(spacy_model)
 
 # Obtener secretos de Streamlit
 client_id = st.secrets['SPOTIFY_CLIENT_ID']
@@ -21,17 +37,13 @@ def get_spotify_token(client_id, client_secret):
 spotify_token = get_spotify_token(client_id, client_secret)
 
 model_name = "microsoft/DialoGPT-medium"
-tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=HF_TOKEN)
-model = AutoModelForCausalLM.from_pretrained(model_name, use_auth_token=HF_TOKEN)
+tokenizer = AutoTokenizer.from_pretrained(model_name, token=HF_TOKEN)
+model = AutoModelForCausalLM.from_pretrained(model_name, token=HF_TOKEN)
 
 st.title("Spotify Chatbot")
 st.write("Este es un chatbot que utiliza la API de Spotify.")
 
 query = st.text_input("Introduce tu consulta:")
-
-# Descargar y cargar el modelo de spaCy si no está disponible
-spacy_model = 'en_core_web_sm'
-spacy_streamlit.load_model(spacy_model)
 
 def generate_response(input_text):
     input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors="pt")
@@ -41,14 +53,14 @@ def generate_response(input_text):
 
 keywords = ["buscar", "canción", "track", "escuchar", "reproducir"]
 
-def is_song_search(user_input, nlp):
+def is_song_search(user_input):
     doc = nlp(user_input.lower())
     for token in doc:
         if token.lemma_ in keywords:
             return True
     return False
 
-def extract_song_name(user_input, nlp):
+def extract_song_name(user_input):
     doc = nlp(user_input.lower())
     song_name = []
     for token in doc:
@@ -68,15 +80,14 @@ def get_track_info(track_name, spotify_token):
     else:
         return "No se encontró la canción."
 
-def chatbot_response(user_input, spotify_token, nlp):
-    if is_song_search(user_input, nlp):
-        track_name = extract_song_name(user_input, nlp)
+def chatbot_response(user_input, spotify_token):
+    if is_song_search(user_input):
+        track_name = extract_song_name(user_input)
         return get_track_info(track_name, spotify_token)
     else:
         return generate_response(user_input)
 
 if query:
-    nlp = spacy_streamlit.load_model(spacy_model)
-    response = chatbot_response(query, spotify_token, nlp)
+    response = chatbot_response(query, spotify_token)
     st.write(response)
-    spacy_streamlit.visualize(query, models=[nlp])
+    spacy_streamlit.visualize_ner(nlp, query)
