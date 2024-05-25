@@ -1,5 +1,5 @@
 sentencepiece
-transformers==4.41.0
+transformers>4.30.0,<4.41.0
 torch==2.3.0
 requests
 spacy>=3.0.0,<4.0.0
