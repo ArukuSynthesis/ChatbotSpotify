@@ -64,7 +64,7 @@ def chatbot_response(user_input, spotify_token):
 # Interfaz de usuario con Streamlit
 st.title("Chatbot con Spotify y DialoGPT")
 
-user_input = st.text_input("Escribe tu mensaje:")
+user_input = st.text_input("Escribe tu mensaje iniciando con "buscar canción":")
 
 if st.button("Enviar"):
     response = chatbot_response(user_input, spotify_token)
