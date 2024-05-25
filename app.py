@@ -8,6 +8,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # Cargar el modelo de spaCy
 nlp = spacy.load("en_core_web_sm")
 
+
+load_dotenv()
+
+client_id = os.getenv('SPOTIFY_CLIENT_ID')
+client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+
 # Función para obtener el token de Spotify
 def get_spotify_token(client_id, client_secret):
     auth_url = 'https://accounts.spotify.com/api/token'
@@ -22,8 +28,6 @@ def get_spotify_token(client_id, client_secret):
     return response.json().get('access_token')
 
 
-client_id = '6bc4999a255e46dcaa86aaf47007ea82'
-client_secret = '0a786758931048aaafad513ba65c2c23'
 spotify_token = get_spotify_token(client_id, client_secret)
 print(f"Spotify Token: {spotify_token}")
 
