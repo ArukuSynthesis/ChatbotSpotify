@@ -1,16 +1,17 @@
 import os
 import requests
 import base64
+import spacy_streamlit
 import spacy
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import streamlit as st
+import subprocess
 
-# Definir una función para descargar el modelo SpaCy si no está disponible
+# Función para descargar el modelo de spaCy si no está disponible
 def download_spacy_model():
-    from spacy.cli import download
-    download("en_core_web_sm")
+    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
 
-# Intentar cargar el modelo SpaCy, si falla descargarlo
+# Intentar cargar el modelo spaCy, si falla descargarlo
 try:
     nlp = spacy.load('en_core_web_sm')
 except OSError:
