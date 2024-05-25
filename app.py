@@ -64,8 +64,9 @@ def chatbot_response(user_input, spotify_token):
 # Interfaz de usuario con Streamlit
 st.title("Chatbot con Spotify y DialoGPT")
 
-client_id = '6bc4999a255e46dcaa86aaf47007ea82'
-client_secret = '0a786758931048aaafad513ba65c2c23'
+client_id = st.secrets['SPOTIFY_CLIENT_ID']
+client_secret = st.secrets['SPOTIFY_CLIENT_SECRET']
+HF_TOKEN = st.secrets['HF_TOKEN']
 spotify_token = get_spotify_token(client_id, client_secret)
 
 # Inicializar el historial de chat en la sesión de Streamlit
