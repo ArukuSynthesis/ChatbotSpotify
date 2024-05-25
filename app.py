@@ -18,7 +18,7 @@ load_dotenv()
 
 client_id = st.secrets['SPOTIFY_CLIENT_ID']
 client_secret = st.secrets['SPOTIFY_CLIENT_SECRET']
-HT_TOKEN = st.secrets['HT_TOKEN']
+HF_TOKEN = st.secrets['HF_TOKEN']
 
 # Función para obtener el token de Spotify
 def get_spotify_token(client_id, client_secret):
