@@ -1,10 +1,4 @@
-pandas
-joblib
+transformers
+torch
 requests
-flask
-flask-restful
-flask-swagger-ui
-flasgger
-python-telegram-bot
-scikit-learn
-gdown
+spacy

@@ -1,206 +1,101 @@
 import os
-import pandas as pd
-import joblib
 import requests
-import gdown
-from flask import Flask, request, jsonify
-from flask_restful import Resource, Api
-from flask_swagger_ui import get_swaggerui_blueprint
-from flasgger import Swagger, swag_from
-from telegram import Update
-from telegram.ext import CommandHandler, CallbackContext, Application, ApplicationBuilder
-from sklearn.metrics.pairwise import cosine_similarity
-import streamlit as st
-import asyncio
-import threading
+import base64
+from dotenv import load_dotenv
+import spacy
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Configuración del token de Telegram
-TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
+# Cargar el modelo de spaCy
+nlp = spacy.load("en_core_web_sm")
 
-# Crear la carpeta data si no existe
-if not os.path.exists('data'):
-    os.makedirs('data')
+# Función para obtener el token de Spotify
+def get_spotify_token(client_id, client_secret):
+    auth_url = 'https://accounts.spotify.com/api/token'
+    auth_header = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    auth_data = {
+        'grant_type': 'client_credentials'
+    }
+    headers = {
+        'Authorization': f'Basic {auth_header}'
+    }
+    response = requests.post(auth_url, headers=headers, data=auth_data)
+    return response.json().get('access_token')
 
-# Descargar el archivo CSV
-url = 'https://drive.google.com/u/1/uc?id=18jTl6d0-7plusVePqU3y7CoFmvyZfG2S&export=download'
-output = 'data/tracks_features.csv'
-if not os.path.exists(output):
-    gdown.download(url, output, quiet=False)
 
-app = Flask(__name__)
-api = Api(app)
-swagger = Swagger(app)
+client_id = '6bc4999a255e46dcaa86aaf47007ea82'
+client_secret = '0a786758931048aaafad513ba65c2c23'
+spotify_token = get_spotify_token(client_id, client_secret)
+print(f"Spotify Token: {spotify_token}")
 
-# Cargar el modelo lineal
-model_path = 'models/linearmodel.pkl'
-model = joblib.load(model_path)
+# Cargar el modelo y el tokenizer de Hugging Face
+model_name = "microsoft/DialoGPT-medium"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name)
 
-# Cargar el dataset
-csv_path = 'data/tracks_features.csv'
-data = pd.read_csv(csv_path)
+# Función para generar respuestas
+def generate_response(input_text):
+    input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors="pt")
+    response_ids = model.generate(input_ids, max_length=1000, pad_token_id=tokenizer.eos_token_id)
+    response_text = tokenizer.decode(response_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
+    return response_text
 
-# Renombrar columnas
-data.rename(columns={'id': 'track_id', 'name': 'track_name', 'album': 'album', 'artists': 'artist'}, inplace=True)
-data['artist'] = data['artist'].str.replace(r"[\[\]']", "", regex=True)
+# Lista de palabras clave relacionadas con la búsqueda de canciones
+keywords = ["buscar", "canción", "track", "escuchar", "reproducir"]
 
-# Columnas no numéricas
-non_numeric_columns = ['track_id', 'track_name', 'album', 'artist']
-numeric_columns = ['danceability', 'energy', 'key', 'loudness', 'mode', 'speechiness', 'instrumentalness', 'liveness', 'valence', 'tempo']
+# Función para detectar si el input del usuario es una solicitud de búsqueda de canción
+def is_song_search(user_input):
+    doc = nlp(user_input.lower())
+    for token in doc:
+        if token.lemma_ in keywords:
+            return True
+    return False
 
-class RecommendTrack(Resource):
-    @swag_from({
-        'responses': {
-            200: {
-                'description': 'Recommended tracks based on the provided track name',
-                'schema': {
-                    'type': 'array',
-                    'items': {
-                        'type': 'object',
-                        'properties': {
-                            'artist': {'type': 'string'},
-                            'track_id': {'type': 'string'},
-                            'track_name': {'type': 'string'},
-                            'album': {'type': 'string'}
-                        }
-                    }
-                }
-            }
-        }
-    })
-    def get(self):
-        """
-        Recommends tracks based on the provided track name
-        ---
-        parameters:
-          - name: track_name
-            in: query
-            type: string
-            required: true
-            description: Name of the track to base recommendations on
-        responses:
-          200:
-            description: A list of recommended tracks
-        """
-        track_name = request.args.get('track_name')
-        if not track_name:
-            return {'error': 'track_name is required'}, 400
+# Extraer el nombre de la canción del input del usuario
+def extract_song_name(user_input):
+    doc = nlp(user_input.lower())
+    song_name = []
+    for token in doc:
+        if token.lemma_ not in keywords:
+            song_name.append(token.text)
+    return " ".join(song_name).strip()
 
-        filtered_data = data[data['track_name'].str.contains(track_name, case=False, na=False)].head(1)
-        if filtered_data.empty:
-            return {'error': 'No tracks found'}, 404
-
-        track_features = filtered_data[numeric_columns].values
-        all_features = data[numeric_columns].values
-
-        similarities = cosine_similarity(track_features, all_features)
-        data['similarity'] = similarities[0]
-
-        recommendations = data.sort_values(by='similarity', ascending=False).head(6)
-        recommendations = recommendations.iloc[1:]  # Excluir la canción de entrada
-
-        response = recommendations[non_numeric_columns].to_dict(orient='records')
-        return jsonify(response)
-
-class SearchTrack(Resource):
-    @swag_from({
-        'responses': {
-            200: {
-                'description': 'Search for tracks based on the provided track name',
-                'schema': {
-                    'type': 'array',
-                    'items': {
-                        'type': 'object',
-                        'properties': {
-                            'artist': {'type': 'string'},
-                            'track_id': {'type': 'string'},
-                            'track_name': {'type': 'string'},
-                            'album': {'type': 'string'}
-                        }
-                    }
-                }
-            }
-        }
-    })
-    def get(self):
-        """
-        Search for tracks based on the provided track name
-        ---
-        parameters:
-          - name: track_name
-            in: query
-            type: string
-            required: true
-            description: Name of the track to search for
-        responses:
-          200:
-            description: A list of tracks matching the search criteria
-        """
-        track_name = request.args.get('track_name')
-        if not track_name:
-            return {'error': 'track_name is required'}, 400
-
-        filtered_data = data[data['track_name'].str.contains(track_name, case=False, na=False)].head(5)
-        if filtered_data.empty:
-            return {'error': 'No tracks found'}, 404
-
-        response = filtered_data[non_numeric_columns].to_dict(orient='records')
-        return jsonify(response)
-
-api.add_resource(RecommendTrack, '/recommend_track')
-api.add_resource(SearchTrack, '/search_track')
-
-# Configuración del bot de Telegram
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text('Hola! Usa /search <nombre de la canción> para buscar una canción o /recommend <nombre de la canción> para obtener recomendaciones.')
-
-async def search(update: Update, context: CallbackContext):
-    if len(context.args) == 0:
-        await update.message.reply_text('Por favor proporciona el nombre de la canción después de /search')
-        return
-
-    track_name = ' '.join(context.args)
-    response = requests.get(f'http://localhost:5000/search_track?track_name={track_name}').json()
-    if 'error' in response:
-        await update.message.reply_text(response['error'])
+# Función para obtener información de una canción de Spotify
+def get_track_info(track_name, spotify_token):
+    search_url = "https://api.spotify.com/v1/search"
+    headers = {
+        "Authorization": f"Bearer {spotify_token}"
+    }
+    params = {
+        "q": track_name,
+        "type": "track",
+        "limit": 1
+    }
+    response = requests.get(search_url, headers=headers, params=params)
+    track_info = response.json()
+    if track_info['tracks']['items']:
+        track = track_info['tracks']['items'][0]
+        return f"Track: {track['name']} by {track['artists'][0]['name']}\nURL: {track['external_urls']['spotify']}"
     else:
-        message = ''
-        for track in response:
-            message += f"Artista: {track['artist']}\nÁlbum: {track['album']}\nCanción: {track['track_name']}\n\n"
-        await update.message.reply_text(message)
+        return "No se encontró la canción."
 
-async def recommend(update: Update, context: CallbackContext):
-    if len(context.args) == 0:
-        await update.message.reply_text('Por favor proporciona el nombre de la canción después de /recommend')
-        return
-
-    track_name = ' '.join(context.args)
-    response = requests.get(f'http://localhost:5000/recommend_track?track_name={track_name}').json()
-    if 'error' in response:
-        await update.message.reply_text(response['error'])
+# Función de respuesta del chatbot
+def chatbot_response(user_input, spotify_token):
+    if is_song_search(user_input):
+        track_name = extract_song_name(user_input)
+        return get_track_info(track_name, spotify_token)
     else:
-        message = ''
-        for track in response:
-            message += f"Artista: {track['artist']}\nÁlbum: {track['album']}\nCanción: {track['track_name']}\n\n"
-        await update.message.reply_text(message)
+        return generate_response(user_input)
 
-def run_telegram_bot():
-    app_telegram = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+# Ejemplos de uso
+user_inputs = [
+    "Quiero escuchar Shape of You",
+    "Puedes buscar la canción Despacito?",
+    "Reproducir Hotel California",
+    "Hola, ¿cómo estás?",
+    "Buscar track Bohemian Rhapsody"
+]
 
-    app_telegram.add_handler(CommandHandler("start", start))
-    app_telegram.add_handler(CommandHandler("search", search))
-    app_telegram.add_handler(CommandHandler("recommend", recommend))
-
-    asyncio.set_event_loop(asyncio.new_event_loop())
-    app_telegram.run_polling()
-
-if __name__ == '__main__':
-    import threading
-
-    def run_flask():
-        app.run(debug=True, use_reloader=False)
-
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
-
-    telegram_thread = threading.Thread(target=run_telegram_bot)
-    telegram_thread.start()
+for user_input in user_inputs:
+    response = chatbot_response(user_input, spotify_token)
+    print(f"User: {user_input}")
+    print(f"Bot: {response}\n")
