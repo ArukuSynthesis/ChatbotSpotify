@@ -1,20 +1,8 @@
+import streamlit as st
 import requests
 import base64
-import spacy
 from transformers import AutoModelForCausalLM, AutoTokenizer
-import streamlit as st
-
-# Función para descargar el modelo de spaCy si no está disponible
-def download_spacy_model():
-    import subprocess
-    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
-
-# Intentar cargar el modelo spaCy, si falla descargarlo
-try:
-    nlp = spacy.load('en_core_web_sm')
-except OSError:
-    download_spacy_model()
-    nlp = spacy.load('en_core_web_sm')
+import torch
 
 # Función para obtener el token de Spotify
 def get_spotify_token(client_id, client_secret):
@@ -29,17 +17,15 @@ def get_spotify_token(client_id, client_secret):
     response = requests.post(auth_url, headers=headers, data=auth_data)
     return response.json().get('access_token')
 
-# Obtener secretos de Streamlit
-client_id = st.secrets['SPOTIFY_CLIENT_ID']
-client_secret = st.secrets['SPOTIFY_CLIENT_SECRET']
-HF_TOKEN = st.secrets['HF_TOKEN']
-
+# Credenciales de Spotify
+client_id = '6bc4999a255e46dcaa86aaf47007ea82'
+client_secret = '0a786758931048aaafad513ba65c2c23'
 spotify_token = get_spotify_token(client_id, client_secret)
 
-# Cargar el modelo y el tokenizer de Hugging Face
+# Cargar el modelo y el tokenizer
 model_name = "microsoft/DialoGPT-medium"
-tokenizer = AutoTokenizer.from_pretrained(model_name, token=HF_TOKEN)
-model = AutoModelForCausalLM.from_pretrained(model_name, token=HF_TOKEN)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name)
 
 # Función para generar respuestas
 def generate_response(input_text):
@@ -48,27 +34,7 @@ def generate_response(input_text):
     response_text = tokenizer.decode(response_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
     return response_text
 
-# Lista de palabras clave relacionadas con la búsqueda de canciones
-keywords = ["buscar", "canción", "track", "escuchar", "reproducir"]
-
-# Función para detectar si el input del usuario es una solicitud de búsqueda de canción
-def is_song_search(user_input):
-    doc = nlp(user_input.lower())
-    for token in doc:
-        if token.lemma_ in keywords:
-            return True
-    return False
-
-# Extraer el nombre de la canción del input del usuario
-def extract_song_name(user_input):
-    doc = nlp(user_input.lower())
-    song_name = []
-    for token in doc:
-        if token.lemma_ not in keywords:
-            song_name.append(token.text)
-    return " ".join(song_name).strip()
-
-# Función para obtener información de una canción de Spotify
+# Función para obtener información de una canción en Spotify
 def get_track_info(track_name, spotify_token):
     search_url = "https://api.spotify.com/v1/search"
     headers = {
@@ -87,20 +53,19 @@ def get_track_info(track_name, spotify_token):
     else:
         return "No se encontró la canción."
 
-# Función de respuesta del chatbot
+# Función para responder al usuario
 def chatbot_response(user_input, spotify_token):
-    if is_song_search(user_input):
-        track_name = extract_song_name(user_input)
+    if "buscar canción" in user_input:
+        track_name = user_input.split("buscar canción")[-1].strip()
         return get_track_info(track_name, spotify_token)
     else:
         return generate_response(user_input)
 
-# Configuración de la interfaz de Streamlit
-st.title("Spotify Chatbot")
-st.write("Este es un chatbot que utiliza la API de Spotify.")
+# Interfaz de usuario con Streamlit
+st.title("Chatbot con Spotify y DialoGPT")
 
-query = st.text_input("Introduce tu consulta:")
+user_input = st.text_input("Escribe tu mensaje:")
 
-if query:
-    response = chatbot_response(query, spotify_token)
+if st.button("Enviar"):
+    response = chatbot_response(user_input, spotify_token)
     st.write(response)
