@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import base64
 from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
 
 # Función para obtener el token de Spotify
 def get_spotify_token(client_id, client_secret):
@@ -64,7 +63,7 @@ def chatbot_response(user_input, spotify_token):
 # Interfaz de usuario con Streamlit
 st.title("Chatbot con Spotify y DialoGPT")
 
-user_input = st.text_input("Escribe tu mensaje iniciando con "buscar canción":")
+user_input = st.text_input("Escribe tu mensaje iniciando con 'buscar canción':")
 
 if st.button("Enviar"):
     response = chatbot_response(user_input, spotify_token)
