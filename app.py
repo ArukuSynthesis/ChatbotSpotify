@@ -32,7 +32,7 @@ def get_track_info(track_name, spotify_token):
     track_info = response.json()
     if track_info['tracks']['items']:
         track = track_info['tracks']['items'][0]
-        return f"Track: {track['name']} by {track['artists'][0]['name']}\nURL: {track['external_urls']['spotify']}"
+        return f"Track: {track['name']} by {track['artists'][0]['name']}\n[URL]({track['external_urls']['spotify']})"
     else:
         return "No se encontró la canción."
 
@@ -64,13 +64,28 @@ def chatbot_response(user_input, spotify_token):
 # Interfaz de usuario con Streamlit
 st.title("Chatbot con Spotify y DialoGPT")
 
-client_id = st.secrets['SPOTIFY_CLIENT_ID']
-client_secret = st.secrets['SPOTIFY_CLIENT_SECRET']
-HF_TOKEN = st.secrets['HF_TOKEN']
+client_id = '6bc4999a255e46dcaa86aaf47007ea82'
+client_secret = '0a786758931048aaafad513ba65c2c23'
 spotify_token = get_spotify_token(client_id, client_secret)
 
-user_input = st.text_input("Escribe tu mensaje iniciando con 'buscar canción':")
+# Inicializar el historial de chat en la sesión de Streamlit
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
 
-if st.button("Enviar"):
+# Función para manejar la entrada del usuario
+def handle_user_input():
+    user_input = st.session_state.user_input
+    st.session_state.user_input = ''  # Limpiar la entrada del usuario
     response = chatbot_response(user_input, spotify_token)
-    st.write(response)
+    st.session_state.chat_history.append(('Usuario', user_input))
+    st.session_state.chat_history.append(('Chatbot', response))
+
+# Entrada del usuario
+st.text_input("Escribe tu mensaje:", key='user_input', on_change=handle_user_input)
+
+# Mostrar el historial de chat
+for speaker, message in st.session_state.chat_history:
+    if speaker == 'Usuario':
+        st.text_area(label="Usuario", value=message, height=50, max_chars=None, key=None)
+    else:
+        st.markdown(f"**Chatbot:** {message}")
