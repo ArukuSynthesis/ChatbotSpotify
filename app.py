@@ -5,11 +5,14 @@ import spacy_streamlit
 import spacy
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import streamlit as st
-import subprocess
+import gdown
 
 # Función para descargar el modelo de spaCy si no está disponible
+
 def download_spacy_model():
-    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
+    url = 'https://drive.google.com/file/d/1ajZbQKFeQg_eMh4_89jnGTZUzNLa5yvM&export=download'
+    output = 'en_core_web_sm'
+    gdown.download(url, output, quiet=False)
 
 # Intentar cargar el modelo spaCy, si falla descargarlo
 try:
