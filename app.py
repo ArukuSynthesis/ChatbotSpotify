@@ -5,12 +5,16 @@ import spacy
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import streamlit as st
 
-# Descargar y cargar el modelo de spaCy
+# Definir una función para descargar el modelo SpaCy si no está disponible
+def download_spacy_model():
+    from spacy.cli import download
+    download("en_core_web_sm")
+
+# Intentar cargar el modelo SpaCy, si falla descargarlo
 try:
     nlp = spacy.load('en_core_web_sm')
 except OSError:
-    from spacy.cli import download
-    download("en_core_web_sm")
+    download_spacy_model()
     nlp = spacy.load('en_core_web_sm')
 
 # Obtener secretos de Streamlit
