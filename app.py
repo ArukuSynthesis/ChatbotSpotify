@@ -1,6 +1,7 @@
 import os
 import requests
 import base64
+import torch
 import spacy
 #from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, AutoTokenizer
