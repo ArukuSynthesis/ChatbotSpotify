@@ -5,6 +5,10 @@ import spacy
 #from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import streamlit as st
+import subprocess
+
+# Modelo de SpaCy
+subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
 
 # Cargar las variables de entorno desde el archivo .env
 #load_dotenv()
